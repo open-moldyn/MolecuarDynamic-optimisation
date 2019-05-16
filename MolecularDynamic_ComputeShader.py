@@ -22,9 +22,9 @@ re = 2.0**(1.0/6.0)*sigma
 rcut = 2.0*re
 
 # nombre d'atomes sur x
-nbrex = 32
+nbrex = 45
 # nombre d'atomes sur y
-nbrey = 32
+nbrey = 45
 
 # nombre de pas
 npas = 100
@@ -188,7 +188,7 @@ consts = {
     "LENGTHY":LengthY,
 }
 context = moderngl.create_standalone_context(require=430)
-compute_shader = context.compute_shader(source('./moldyn.gl', consts))
+compute_shader = context.compute_shader(source('./moldyn.glsl', consts))
 
 BUFFER_P = context.buffer(reserve=8*npart)
 BUFFER_P.bind_to_storage_buffer(0);
@@ -321,7 +321,7 @@ plt.legend([line_T, line_TC], ['T', 'T consigne'])
 plt.show()
 
 # dessin de MSD (mean square displacement)
-"""plt.figure(5)
+plt.figure(5)
 plt.plot(pasT,pasMSD)
 plt.xlabel('Temperature (K)')
 plt.ylabel('MSD')
@@ -353,7 +353,7 @@ line_ET, = plt.plot(pask,pasET)
 plt.xlabel('pas')
 plt.ylabel('Energies (J)')
 plt.legend([line_EP,line_ET], ['EP','ET'])
-plt.show()"""
+plt.show()
 
 #
 # film de la simu: image tout les X pas de temps
