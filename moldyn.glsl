@@ -15,25 +15,41 @@
 #define LENGTHY %%LENGTHY%%
 
 
-layout(local_size_x=X, local_size_y=1, local_size_z=1) in;
+layout (local_size_x=X, local_size_y=1, local_size_z=1) in;
+
 layout (std430, binding=0) buffer in_0
 {
     vec2 inxs[];
 };
 
-layout (std430, binding=1) buffer out_0
+layout (std430, binding=1) buffer in_1
 {
-    vec2 outxs[];
+    vec2 inxs2[];
 };
 
-layout (std430, binding=2) buffer out_1
+layout (std430, binding=2) buffer out_0
+{
+    vec2 outfs[];
+};
+
+layout (std430, binding=3) buffer out_1
+{
+    vec2 outfs2[];
+};
+
+layout (std430, binding=4) buffer out_2
 {
     float outes[];
 };
 
-layout (std430, binding=3) buffer out_2
+layout (std430, binding=5) buffer out_3
 {
     float outms[];
+};
+
+layout (std430, binding=6) buffer in_params
+{
+    uint inparam[];
 };
 
 float force(float dist) {
@@ -50,12 +66,14 @@ void main()
 {
 	const int x = int(gl_GlobalInvocationID.x);
 	const vec2 pos = inxs[x];
+
+	int itermax = min(X,inparams[3])
 	
 	vec2 f = vec2(0.0,0.0);
 	float e = 0.0;
 	float m = 0.0;
 	
-	for(int i=0;i<X;i++) {
+	for(int i=0;i<itermax;i++) {
 		if(i!=x) {
 			vec2 distxy = pos - inxs[i];
 			
@@ -83,7 +101,7 @@ void main()
 		}
 	}
 	
-	outxs[x] = f;
+	outfs[x] = f;
 	outes[x] = e;
 	outms[x] = m;
 }
