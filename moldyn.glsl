@@ -80,31 +80,30 @@ void main()
 		float m = 0.0;
 
 		for (int i=0;i<itermax;i++) {
-			if (i!=x) {
-				vec2 distxy = pos - inxs[i];
 
-				if (distxy.x<(-SHIFTX)) {
-					distxy.x+=LENGTHX;
-				}
-				if (distxy.x>SHIFTX) {
-					distxy.x-=LENGTHX;
-				}
+			vec2 distxy = pos - inxs[i];
 
-				if (distxy.y<(-SHIFTY)) {
-					distxy.y+=LENGTHY;
-				}
-				if (distxy.y>SHIFTY) {
-					distxy.y-=LENGTHY;
-				}
-
-
-				float dist = length(distxy);
-				if (dist<RCUT) {
-					f+=force(dist)*distxy;
-					e+=energy(dist);
-					m+=1.0;
-				}
+			if (distxy.x<(-SHIFTX)) {
+				distxy.x+=LENGTHX;
 			}
+			if (distxy.x>SHIFTX) {
+				distxy.x-=LENGTHX;
+			}
+
+			if (distxy.y<(-SHIFTY)) {
+				distxy.y+=LENGTHY;
+			}
+			if (distxy.y>SHIFTY) {
+				distxy.y-=LENGTHY;
+			}
+
+			float dist = length(distxy);
+			if (dist<RCUT) {
+				f+=force(dist)*distxy;
+				e+=energy(dist);
+				m+=1.0;
+			}
+
 		}
 
 		outfs[x] = f;
