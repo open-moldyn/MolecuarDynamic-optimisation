@@ -81,7 +81,7 @@ void main()
 
 		for (int i=0;i<itermax;i++) {
 
-			vec2 distxy = pos - inxs[i];
+			vec2 distxy = pos - inxs2[i];
 
 			if (distxy.x<(-SHIFTX)) {
 				distxy.x+=LENGTHX;
@@ -100,6 +100,7 @@ void main()
 			float dist = length(distxy);
 			if (dist<RCUT) {
 				f+=force(dist)*distxy;
+                outfs2[i]-=force(dist)*distxy;
 				e+=energy(dist);
 				m+=1.0;
 			}
