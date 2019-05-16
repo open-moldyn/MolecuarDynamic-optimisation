@@ -3,6 +3,7 @@ import numpy as np
 import numexpr as ne # ne.evaluate("") si j ai compris favorise le multicoeur -> oui et pas que
 import time # calcul du... temps de calcul
 import moderngl
+from itertools import combinations
 
 
 # Ce programme utilise:
@@ -22,9 +23,9 @@ re = 2.0**(1.0/6.0)*sigma
 rcut = 2.0*re
 
 # nombre d'atomes sur x
-nbrex = 45
+nbrex = 32
 # nombre d'atomes sur y
-nbrey = 45
+nbrey = 32
 
 # nombre de pas
 npas = 100
@@ -44,8 +45,23 @@ betaC = True # True si la temperature est controlee, False sinon
 # --- \paramètres ---------------------------------------------------------------------------
 
 
+
 # l'affichage prenant trop de temps (et commenter tous les "print" aussi), on redéfinit print sur du rien pour les tests de vitesse
 print=lambda *a:0
+
+# nombre d'atomes au total
+npart = nbrex*nbrey
+
+max_buffer_size = 1024
+nombre_buffer = int(np.ceil(npart/max_buffer_size))
+buffer_size = int(np.ceil(npart/nombre_buffer))
+# on découpe pour le shader qui ne sait pas faire trop de choses à la fois
+
+combinations_set = set(combinations(range(nombre_buffer),2))
+
+nombre_elements = np.array([buffer_size]*nombre_buffer)
+if npart%buffer_size:
+    nombre_elements[-1] = npart%buffer_size
 
 
 print("distance interatomique: %s Angstrom"%(re*1e10))
@@ -62,8 +78,6 @@ print("periode oscillation atomique: %s ps"%(peri0*1e12))
 dt = peri0/75
 print("pas de temps: %s ps"%(dt*1e12))
 #
-# nombre d'atomes au total
-npart = nbrex*nbrey
 #
 # limite droite de boite (position)
 XlimD = (nbrex-1)*re+0.5*re
@@ -136,7 +150,7 @@ plt.plot(posx, posy,'ro',markersize=5)
 plt.ylim(YlimB,YlimH)
 plt.xlim(XlimG,XlimD)
 plt.show(block=True) # true empeche l'excecution de la suite du programme avant fermeture de la fenetre
-plt.close
+plt.close()
 #
 # les forces au premier pas sont nulles et de la dimension de posx (posy)
 Fx = ne.evaluate("0.0*posx")
@@ -190,14 +204,26 @@ consts = {
 context = moderngl.create_standalone_context(require=430)
 compute_shader = context.compute_shader(source('./moldyn.glsl', consts))
 
-BUFFER_P = context.buffer(reserve=8*npart)
+BUFFER_P = context.buffer(reserve=8*buffer_size)
 BUFFER_P.bind_to_storage_buffer(0);
-BUFFER_F = context.buffer(reserve=8*npart)
-BUFFER_F.bind_to_storage_buffer(1);
-BUFFER_E = context.buffer(reserve=4*npart)
-BUFFER_E.bind_to_storage_buffer(2);
-BUFFER_M = context.buffer(reserve=4*npart)
-BUFFER_M.bind_to_storage_buffer(3);
+
+BUFFER_P2 = context.buffer(reserve=8*buffer_size)
+BUFFER_P2.bind_to_storage_buffer(1);
+
+BUFFER_F = context.buffer(reserve=8*buffer_size)
+BUFFER_F.bind_to_storage_buffer(2);
+
+BUFFER_F2 = context.buffer(reserve=8*buffer_size)
+BUFFER_F2.bind_to_storage_buffer(3);
+
+BUFFER_E = context.buffer(reserve=4*buffer_size)
+BUFFER_E.bind_to_storage_buffer(4);
+
+BUFFER_M = context.buffer(reserve=4*buffer_size)
+BUFFER_M.bind_to_storage_buffer(5);
+
+BUFFER_PARAMS = context.buffer(reserve=4*5)
+BUFFER_PARAMS.bind_to_storage_buffer(6)
 
 
 pask = np.array(range(npas)) # le pas lui-meme
@@ -233,20 +259,45 @@ for k in range(npas):
     np.save(fichx, pos[:,0])
     np.save(fichy, pos[:,1])
 
+    EP = 0
 
-    BUFFER_P.write(pos.astype('f4').tobytes())
+    F.fill(0)
+    mask = np.zeros(npart)
 
-    compute_shader.run();
+    for i,j in combinations_set:
 
-    Fgl = np.frombuffer(BUFFER_F.read(), dtype=np.float32)
-    EPgl = np.frombuffer(BUFFER_E.read(), dtype=np.float32)
-    mask = np.frombuffer(BUFFER_M.read(), dtype=np.float32)
-    
-    F[:,0] = Fgl[::2]
-    F[:,1] = Fgl[1::2]
+        params = np.array([i,j,nombre_elements[i],nombre_elements[j],0])
+        BUFFER_PARAMS.write(params.astype("uint32").tobytes())
+
+        inf_i = i * buffer_size
+        sup_i = inf_i + nombre_elements[i]
+
+        inf_j =  j * buffer_size
+        sup_j =  inf_j + nombre_elements[j]
+
+        BUFFER_P.write(pos[inf_i:sup_i].astype('f4').tobytes())
+        BUFFER_P2.write(pos[inf_j:sup_j].astype('f4').tobytes())
+
+        compute_shader.run();
+
+        Fgl = np.frombuffer(BUFFER_F.read(), dtype=np.float32)
+        F2gl = np.frombuffer(BUFFER_F2.read(), dtype=np.float32)
+
+        EPgl = np.frombuffer(BUFFER_E.read(), dtype=np.float32)
+
+        mask += np.frombuffer(BUFFER_M.read(), dtype=np.float32)
+
+        F[inf_i:sup_i,0] += Fgl[::2]
+        F[inf_i:sup_i,1] += Fgl[1::2]
+
+        F[inf_j:sup_j,0] += F2gl[::2]
+        F[inf_j:sup_j,1] += F2gl[1::2]
 
     # caclul energie potentielle
-    EP = ne.evaluate("sum(EPgl)")*0.5
+        EP += ne.evaluate("sum(EPgl)")
+
+    EP *= 0.5
+
     print("Energie potentielle : %s J"%(EP)) # affichage
 
     # calcul energie cinetique
