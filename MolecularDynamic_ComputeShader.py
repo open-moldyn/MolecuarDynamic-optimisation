@@ -219,7 +219,7 @@ BUFFER_F2.bind_to_storage_buffer(3);
 BUFFER_E = context.buffer(reserve=4*buffer_size)
 BUFFER_E.bind_to_storage_buffer(4);
 
-BUFFER_M = context.buffer(reserve=4*buffer_size)
+BUFFER_M = context.buffer(reserve=4*1)
 BUFFER_M.bind_to_storage_buffer(5);
 
 BUFFER_PARAMS = context.buffer(reserve=4*5)
@@ -262,8 +262,7 @@ for k in range(npas):
     EP = 0
 
     F.fill(0)
-    mask = np.zeros(npart)
-
+    BUFFER_M.clear()
     for i,j in combinations_set:
 
         params = np.array([i,j,nombre_elements[i],nombre_elements[j],0])
@@ -275,17 +274,20 @@ for k in range(npas):
         inf_j =  j * buffer_size
         sup_j =  inf_j + nombre_elements[j]
 
+        BUFFER_F.clear()
+        BUFFER_F2.clear()
+
         BUFFER_P.write(pos[inf_i:sup_i].astype('f4').tobytes())
         BUFFER_P2.write(pos[inf_j:sup_j].astype('f4').tobytes())
 
-        compute_shader.run();
+        compute_shader.run()
 
         Fgl = np.frombuffer(BUFFER_F.read(), dtype=np.float32)
         F2gl = np.frombuffer(BUFFER_F2.read(), dtype=np.float32)
 
         EPgl = np.frombuffer(BUFFER_E.read(), dtype=np.float32)
 
-        mask += np.frombuffer(BUFFER_M.read(), dtype=np.float32)
+
 
         F[inf_i:sup_i,0] += Fgl[::2]
         F[inf_i:sup_i,1] += Fgl[1::2]
@@ -295,8 +297,7 @@ for k in range(npas):
 
     # caclul energie potentielle
         EP += ne.evaluate("sum(EPgl)")
-
-    EP *= 0.5
+    mask_sum = np.frombuffer(BUFFER_M.read(), dtype=np.float32)[0]
 
     print("Energie potentielle : %s J"%(EP)) # affichage
 
@@ -308,7 +309,7 @@ for k in range(npas):
     ET = EC+EP
     
     # calcul liaison par atome
-    pasLiai[k] = sum(mask)*inv2nparts
+    pasLiai[k] = mask_sum * inv2nparts
     
     # stockage des energies
     pasEC[k] = EC

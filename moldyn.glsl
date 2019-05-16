@@ -49,7 +49,7 @@ layout (std430, binding=5) buffer out_3
 
 layout (std430, binding=6) buffer in_params
 {
-    uint inparam[];
+    uint inparams[];
 };
 
 float force(float dist) {
@@ -67,7 +67,7 @@ void main()
 	const int x = int(gl_GlobalInvocationID.x);
 	const vec2 pos = inxs[x];
 
-	int itermax = min(X,inparams[3]);
+	uint itermax = min(X,inparams[3]);
 
 	if(x < inparams[2]) {
 
@@ -109,6 +109,6 @@ void main()
 
 		outfs[x] = f;
 		outes[x] = e;
-		outms[x] = m;
+		outms[0] += m;
 	}
 }
