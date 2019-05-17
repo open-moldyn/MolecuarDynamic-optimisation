@@ -6,6 +6,9 @@ import moderngl
 from itertools import product
 
 
+import gl_util
+
+
 # Ce programme utilise:
 # le potentiel de Lennard-Jones
 # la methode de Velocity-Verlet pour cacluler les positions
@@ -23,9 +26,9 @@ re = 2.0**(1.0/6.0)*sigma
 rcut = 2.0*re
 
 # nombre d'atomes sur x
-nbrex = 200
+nbrex = 100
 # nombre d'atomes sur y
-nbrey = 200
+nbrey = 100
 
 # nombre de pas
 npas = 100
@@ -52,7 +55,7 @@ print=lambda *a:0
 # nombre d'atomes au total
 npart = nbrex*nbrey
 
-max_buffer_size = 2048
+max_buffer_size = gl_util.testMaxSizes()
 nombre_buffer = int(np.ceil(npart/max_buffer_size))
 buffer_size = int(np.ceil(npart/nombre_buffer))
 # on découpe pour le shader qui ne sait pas faire trop de choses à la fois
@@ -177,17 +180,6 @@ length = np.array([LengthX, LengthY])
 
 
 
-def source(uri, consts):
-    ''' read gl code '''
-    with open(uri, 'r') as fp:
-        content = fp.read()
-
-    # feed constant values
-    for key, value in consts.items():
-        content = content.replace(f"%%{key}%%", str(value))
-    return content
-
-
 # Initialisation du contexte pour le GLSL
 consts = {
     "X": buffer_size,
@@ -202,7 +194,7 @@ consts = {
     "LENGTHY":LengthY,
 }
 context = moderngl.create_standalone_context(require=430)
-compute_shader = context.compute_shader(source('./moldyn.glsl', consts))
+compute_shader = context.compute_shader(gl_util.source('./moldyn.glsl', consts))
 
 BUFFER_P = context.buffer(reserve=8*buffer_size)
 BUFFER_P.bind_to_storage_buffer(0);
