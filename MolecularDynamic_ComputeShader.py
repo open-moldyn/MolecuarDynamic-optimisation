@@ -3,7 +3,7 @@ import numpy as np
 import numexpr as ne # ne.evaluate("") si j ai compris favorise le multicoeur -> oui et pas que
 import time # calcul du... temps de calcul
 import moderngl
-from itertools import combinations
+from itertools import product
 
 
 # Ce programme utilise:
@@ -23,9 +23,9 @@ re = 2.0**(1.0/6.0)*sigma
 rcut = 2.0*re
 
 # nombre d'atomes sur x
-nbrex = 32
+nbrex = 200
 # nombre d'atomes sur y
-nbrey = 32
+nbrey = 200
 
 # nombre de pas
 npas = 100
@@ -52,12 +52,12 @@ print=lambda *a:0
 # nombre d'atomes au total
 npart = nbrex*nbrey
 
-max_buffer_size = 1024
+max_buffer_size = 2048
 nombre_buffer = int(np.ceil(npart/max_buffer_size))
 buffer_size = int(np.ceil(npart/nombre_buffer))
 # on découpe pour le shader qui ne sait pas faire trop de choses à la fois
 
-combinations_set = set(combinations(range(nombre_buffer),2))
+combinations_set = set(product(range(nombre_buffer),repeat=2))
 
 nombre_elements = np.array([buffer_size]*nombre_buffer)
 if npart%buffer_size:
@@ -190,7 +190,7 @@ def source(uri, consts):
 
 # Initialisation du contexte pour le GLSL
 consts = {
-    "X": npart,
+    "X": buffer_size,
     "Y": 1,
     "Z": 1,
     "RCUT":rcut,
@@ -213,17 +213,14 @@ BUFFER_P2.bind_to_storage_buffer(1);
 BUFFER_F = context.buffer(reserve=8*buffer_size)
 BUFFER_F.bind_to_storage_buffer(2);
 
-BUFFER_F2 = context.buffer(reserve=8*buffer_size)
-BUFFER_F2.bind_to_storage_buffer(3);
-
 BUFFER_E = context.buffer(reserve=4*buffer_size)
-BUFFER_E.bind_to_storage_buffer(4);
+BUFFER_E.bind_to_storage_buffer(3);
 
-BUFFER_M = context.buffer(reserve=4*1)
-BUFFER_M.bind_to_storage_buffer(5);
+BUFFER_M = context.buffer(reserve=4*buffer_size)
+BUFFER_M.bind_to_storage_buffer(4);
 
 BUFFER_PARAMS = context.buffer(reserve=4*5)
-BUFFER_PARAMS.bind_to_storage_buffer(6)
+BUFFER_PARAMS.bind_to_storage_buffer(5)
 
 
 pask = np.array(range(npas)) # le pas lui-meme
@@ -238,6 +235,7 @@ pasLiai = np.zeros(npas) # nbre liaisons par atome
 pasMSD = np.zeros(npas) # MSD
 tempstot = 0 #initialisation du chrono
 
+mask = np.zeros(npart)
 
 for k in range(npas):
     debutk = time.perf_counter() # calcul le temps de calcul
@@ -274,31 +272,24 @@ for k in range(npas):
         inf_j =  j * buffer_size
         sup_j =  inf_j + nombre_elements[j]
 
-        BUFFER_F.clear()
-        BUFFER_F2.clear()
-
         BUFFER_P.write(pos[inf_i:sup_i].astype('f4').tobytes())
         BUFFER_P2.write(pos[inf_j:sup_j].astype('f4').tobytes())
 
         compute_shader.run()
 
         Fgl = np.frombuffer(BUFFER_F.read(), dtype=np.float32)
-        F2gl = np.frombuffer(BUFFER_F2.read(), dtype=np.float32)
 
         EPgl = np.frombuffer(BUFFER_E.read(), dtype=np.float32)
-
-
 
         F[inf_i:sup_i,0] += Fgl[::2]
         F[inf_i:sup_i,1] += Fgl[1::2]
 
-        F[inf_j:sup_j,0] += F2gl[::2]
-        F[inf_j:sup_j,1] += F2gl[1::2]
+        mask[inf_i:sup_i] = np.frombuffer(BUFFER_M.read(), dtype=np.float32)
 
     # caclul energie potentielle
         EP += ne.evaluate("sum(EPgl)")
-    mask_sum = np.frombuffer(BUFFER_M.read(), dtype=np.float32)[0]
-
+    mask_sum = ne.evaluate("sum(mask)")
+    EP *= 0.5
     print("Energie potentielle : %s J"%(EP)) # affichage
 
     # calcul energie cinetique
@@ -353,7 +344,7 @@ fichy.close()
 plt.figure(2)
 plt.xlim(XlimG,XlimD)
 plt.ylim(YlimB,YlimH)
-plt.plot(pos[:,0],pos[:,1],'ro', markersize=5)
+plt.plot(pos[:,0],pos[:,1],'ro', markersize=2)
 plt.show()
 
 # dessin du temps CPU

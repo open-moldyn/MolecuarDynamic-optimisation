@@ -32,22 +32,18 @@ layout (std430, binding=2) buffer out_0
     vec2 outfs[];
 };
 
-layout (std430, binding=3) buffer out_1
-{
-    vec2 outfs2[];
-};
 
-layout (std430, binding=4) buffer out_2
+layout (std430, binding=3) buffer out_1
 {
     float outes[];
 };
 
-layout (std430, binding=5) buffer out_3
+layout (std430, binding=4) buffer out_2
 {
     float outms[];
 };
 
-layout (std430, binding=6) buffer in_params
+layout (std430, binding=5) buffer in_params
 {
     uint inparams[];
 };
@@ -71,44 +67,39 @@ void main()
 
 	if(x < inparams[2]) {
 
-		if (inparams[0] == inparams[1]) {
-			itermax = x;
-		}
-
 		vec2 f = vec2(0.0, 0.0);
 		float e = 0.0;
 		float m = 0.0;
 
 		for (int i=0;i<itermax;i++) {
+			if (inparams[0]!=inparams[1] || i!=x) {
+				vec2 distxy = pos - inxs2[i];
 
-			vec2 distxy = pos - inxs2[i];
+				if (distxy.x<(-SHIFTX)) {
+					distxy.x+=LENGTHX;
+				}
+				if (distxy.x>SHIFTX) {
+					distxy.x-=LENGTHX;
+				}
 
-			if (distxy.x<(-SHIFTX)) {
-				distxy.x+=LENGTHX;
-			}
-			if (distxy.x>SHIFTX) {
-				distxy.x-=LENGTHX;
-			}
+				if (distxy.y<(-SHIFTY)) {
+					distxy.y+=LENGTHY;
+				}
+				if (distxy.y>SHIFTY) {
+					distxy.y-=LENGTHY;
+				}
 
-			if (distxy.y<(-SHIFTY)) {
-				distxy.y+=LENGTHY;
+				float dist = length(distxy);
+				if (dist<RCUT) {
+					f+=force(dist)*distxy;
+					e+=energy(dist);
+					m+=1.0;
+				}
 			}
-			if (distxy.y>SHIFTY) {
-				distxy.y-=LENGTHY;
-			}
-
-			float dist = length(distxy);
-			if (dist<RCUT) {
-				f+=force(dist)*distxy;
-                outfs2[i]-=force(dist)*distxy;
-				e+=energy(dist);
-				m+=1.0;
-			}
-
 		}
 
 		outfs[x] = f;
 		outes[x] = e;
-		outms[0] += m;
+		outms[x] = m;
 	}
 }
