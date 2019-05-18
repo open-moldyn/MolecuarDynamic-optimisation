@@ -6,6 +6,7 @@
 #define X %%X%%
 #define Y %%Y%%
 #define Z %%Z%%
+#define NPART %%NPART%%
 #define RCUT %%RCUT%%
 #define EPSILON %%EPSILON%%
 #define SIGMA %%SIGMA%%
@@ -14,17 +15,13 @@
 #define LENGTHX %%LENGTHX%%
 #define LENGTHY %%LENGTHY%%
 
+#define RCUT2 RCUT*RCUT
 
 layout (local_size_x=X, local_size_y=1, local_size_z=1) in;
 
 layout (std430, binding=0) buffer in_0
 {
     vec2 inxs[];
-};
-
-layout (std430, binding=1) buffer in_1
-{
-    vec2 inxs2[];
 };
 
 layout (std430, binding=2) buffer out_0
@@ -63,17 +60,15 @@ void main()
 	const int x = int(gl_GlobalInvocationID.x);
 	const vec2 pos = inxs[x];
 
-	uint itermax = min(X,inparams[3]);
-
-	if(x < inparams[2]) {
+	if(x < NPART) {
 
 		vec2 f = vec2(0.0, 0.0);
 		float e = 0.0;
 		float m = 0.0;
 
-		for (int i=0;i<itermax;i++) {
-			if (inparams[0]!=inparams[1] || i!=x) {
-				vec2 distxy = pos - inxs2[i];
+		for (int i=0;i<NPART;i++) {
+			if (i!=x) {
+				vec2 distxy = pos - inxs[i];
 
 				if (distxy.x<(-SHIFTX)) {
 					distxy.x+=LENGTHX;
@@ -89,8 +84,9 @@ void main()
 					distxy.y-=LENGTHY;
 				}
 
-				float dist = length(distxy);
-				if (dist<RCUT) {
+				float dist2 = dot(distxy,distxy);
+				if (dist2<RCUT2) {
+					float dist = sqrt(dist2);
 					f+=force(dist)*distxy;
 					e+=energy(dist);
 					m+=1.0;
