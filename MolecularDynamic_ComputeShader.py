@@ -4,8 +4,9 @@ import numexpr as ne # ne.evaluate("") si j ai compris favorise le multicoeur ->
 import time # calcul du... temps de calcul
 import moderngl
 from itertools import product
-
-
+from PIL import Image
+import io
+from imageio_ffmpeg import *
 import gl_util
 
 
@@ -50,6 +51,7 @@ betaC = True # True si la temperature est controlee, False sinon
 
 
 # l'affichage prenant trop de temps (et commenter tous les "print" aussi), on redéfinit print sur du rien pour les tests de vitesse
+ppprint=print
 print=lambda *a:0
 
 # nombre d'atomes au total
@@ -377,27 +379,38 @@ plt.show()
 # film de la simu: image tout les X pas de temps
 if film :
 # ouverture pour la lecture
+    imgs = []
     fix=open('storex.npy','rb')
     fiy=open('storey.npy','rb')
     # liste de k ou tracer le graph
     klist = range(0,npas,pfilm)
     # boucle pour creer le film
-    
+    figure_size = (1920, 1088)
+    gen = write_frames("debug.mp4", figure_size,fps=24,quality=9)
+    gen.send(None)
     for k in range(npas):
         posx = np.load(fix) # on charge a chaque pas de temps
         posy = np.load(fiy) # on charge a chaque pas de temps
         # dessin a chaque pas (ne s'ouvre pas: est sauvegarde de maniere incrementale)
         if k in klist:
-          # definition du domaine de dessin
-          plt.ioff() # pour ne pas afficher les graphs)
-          fig = plt.figure()
-          plt.ylim(YlimB,YlimH)
-          plt.xlim(XlimG,XlimD)
-          plt.xlabel(k)
-          plt.plot(posx,posy,'ro', markersize=5)
-          fig.savefig('StorePic/MD-picture%s.png' % k) # sauvegarde incrementale
-          plt.close(fig) # fermeture du graph
-    # fin du film
+            plt.figure(0, figsize=(figure_size[0] / (72*2), figure_size[1] / (72*2)))
+            # definition du domaine de dessin
+            plt.ioff() # pour ne pas afficher les graphs)
+            plt.ylim(YlimB,YlimH)
+            plt.xlim(XlimG,XlimD)
+            plt.xlabel(k)
+            plt.plot(posx,posy,'ro', markersize=2)
+            temp = io.BytesIO()
+            plt.savefig(temp, format='raw',dpi=72*2) # sauvegarde incrementale
+            plt.clf()
+            temp.seek(0)
+            #imgs.append(Image.frombytes('RGBA', figure_size, temp.read()).convert('RGB'))
+            ppprint(k)
+            gen.send(Image.frombytes('RGBA', figure_size, temp.read()).convert('RGB').tobytes())
+
+    #imageio.mimwrite(f"./debug.gif", imgs, "GIF", duration=0.05,subrectangles=True)
+    gen.close()
+# fin du film
     fix.close()
     fiy.close()
 print ('%%%%%%%%%%%%%%%%%%%%%%')
