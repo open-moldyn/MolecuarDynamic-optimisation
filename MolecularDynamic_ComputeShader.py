@@ -27,25 +27,25 @@ re = 2.0**(1.0/6.0)*sigma
 rcut = 2.0*re
 
 # nombre d'atomes sur x
-nbrex = 200
+nbrex = 100
 # nombre d'atomes sur y
-nbrey = 200
+nbrey = 100
 
 # nombre de pas
-npas = 100
+npas = 5000
 
 # pour le film, afficher une image simule sur:
 pfilm = 5
 # enregistrer les images du film?
-film = False
+film = True
 
 # temperature voulue, on peut programmer ce qu'on veut: ici un cosinus
 Tini = 2 # temperature initiale visee kelvin
-DeltaT = 100 # Kelvin amplitude
-perioT = 2.0*npas # periode en pas de temps
+DeltaT = 150 # Kelvin amplitude
+perioT = 0.5*npas # periode en pas de temps
 gamma = 0.5 # parametre pour asservir la temperature ("potard")
 betaC = True # True si la temperature est controlee, False sinon
-
+markersize = 0.5
 # --- \paramètres ---------------------------------------------------------------------------
 
 
@@ -151,7 +151,7 @@ print("temperature initiale: %s K"%(Tvoulue))
 plt.figure(1)
 plt.quiver([np.mean(posx)],[np.mean(posy)],[np.mean(vx*dt)],[np.mean(vy*dt)],color='g',angles='xy', scale_units='xy', scale=1) # le deplacement global de toutes les particules
 plt.quiver(posx,posy,vx*dt*200,vy*dt*200,(vx*vx+vy*vy),angles='xy', scale_units='xy', scale=1) # le deplacement de chaque particule
-plt.plot(posx, posy,'ro',markersize=2)
+plt.plot(posx, posy,'ro',markersize=markersize)
 plt.ylim(YlimB,YlimH)
 plt.xlim(XlimG,XlimD)
 plt.show(block=True) # true empeche l'excecution de la suite du programme avant fermeture de la fenetre
@@ -164,9 +164,11 @@ F = np.zeros(np.shape(pos))
 #
 # enregistrement des positions dans des fichiers,
 # c pas propre mais ca fonctionne: a modifier
-fichx = open('storex.npy', 'a+b')
+
+
+fichx = open('storex.npy', 'w+b')
 np.save(fichx, posx)
-fichy = open('storey.npy', 'a+b')
+fichy = open('storey.npy', 'w+b')
 np.save(fichy, posy)
 #
 # initialisation listes fonctions du pas
@@ -232,7 +234,7 @@ mask = np.zeros(npart)
 for k in range(npas):
     debutk = time.perf_counter() # calcul le temps de calcul
     print('%%%%%%%%%%%%%%')
-    print("pas numero: %s"%(k))
+    ppprint("pas numero: %s"%(k))
     # methode de velocity-verlet
     # vitesse au demi pas de temps
     v2 = ne.evaluate("v + F*dt2m")
@@ -321,7 +323,7 @@ fichy.close()
 plt.figure(2)
 plt.xlim(XlimG,XlimD)
 plt.ylim(YlimB,YlimH)
-plt.plot(pos[:,0],pos[:,1],'ro', markersize=2)
+plt.plot(pos[:,0],pos[:,1],'ro', markersize=markersize)
 plt.show()
 
 # dessin du temps CPU
@@ -386,22 +388,23 @@ if film :
     klist = range(0,npas,pfilm)
     # boucle pour creer le film
     figure_size = (1920, 1088)
-    gen = write_frames("debug.mp4", figure_size,fps=24,quality=9)
+    gen = write_frames("debug.mp4", figure_size,fps=24,quality=10)
     gen.send(None)
     for k in range(npas):
         posx = np.load(fix) # on charge a chaque pas de temps
         posy = np.load(fiy) # on charge a chaque pas de temps
         # dessin a chaque pas (ne s'ouvre pas: est sauvegarde de maniere incrementale)
         if k in klist:
-            plt.figure(0, figsize=(figure_size[0] / (72*2), figure_size[1] / (72*2)))
+            plt.figure(0, figsize=(figure_size[0] / (72*3), figure_size[1] / (72*3)))
             # definition du domaine de dessin
             plt.ioff() # pour ne pas afficher les graphs)
             plt.ylim(YlimB,YlimH)
             plt.xlim(XlimG,XlimD)
             plt.xlabel(k)
-            plt.plot(posx,posy,'ro', markersize=2)
+            plt.plot(posx,posy,'ro', markersize=markersize)
+            plt.title(str(pasT[k]))
             temp = io.BytesIO()
-            plt.savefig(temp, format='raw',dpi=72*2) # sauvegarde incrementale
+            plt.savefig(temp, format='raw',dpi=72*3) # sauvegarde incrementale
             plt.clf()
             temp.seek(0)
             #imgs.append(Image.frombytes('RGBA', figure_size, temp.read()).convert('RGB'))
