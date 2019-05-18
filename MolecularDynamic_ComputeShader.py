@@ -26,9 +26,9 @@ re = 2.0**(1.0/6.0)*sigma
 rcut = 2.0*re
 
 # nombre d'atomes sur x
-nbrex = 100
+nbrex = 200
 # nombre d'atomes sur y
-nbrey = 100
+nbrey = 200
 
 # nombre de pas
 npas = 100
@@ -149,7 +149,7 @@ print("temperature initiale: %s K"%(Tvoulue))
 plt.figure(1)
 plt.quiver([np.mean(posx)],[np.mean(posy)],[np.mean(vx*dt)],[np.mean(vy*dt)],color='g',angles='xy', scale_units='xy', scale=1) # le deplacement global de toutes les particules
 plt.quiver(posx,posy,vx*dt*200,vy*dt*200,(vx*vx+vy*vy),angles='xy', scale_units='xy', scale=1) # le deplacement de chaque particule
-plt.plot(posx, posy,'ro',markersize=5)
+plt.plot(posx, posy,'ro',markersize=2)
 plt.ylim(YlimB,YlimH)
 plt.xlim(XlimG,XlimD)
 plt.show(block=True) # true empeche l'excecution de la suite du programme avant fermeture de la fenetre
@@ -185,6 +185,7 @@ consts = {
     "X": buffer_size,
     "Y": 1,
     "Z": 1,
+    "NPART":npart,
     "RCUT":rcut,
     "EPSILON":epsilon,
     "SIGMA":sigma,
@@ -196,19 +197,16 @@ consts = {
 context = moderngl.create_standalone_context(require=430)
 compute_shader = context.compute_shader(gl_util.source('./moldyn.glsl', consts))
 
-BUFFER_P = context.buffer(reserve=8*buffer_size)
+BUFFER_P = context.buffer(reserve=8*npart)
 BUFFER_P.bind_to_storage_buffer(0);
 
-BUFFER_P2 = context.buffer(reserve=8*buffer_size)
-BUFFER_P2.bind_to_storage_buffer(1);
-
-BUFFER_F = context.buffer(reserve=8*buffer_size)
+BUFFER_F = context.buffer(reserve=8*npart)
 BUFFER_F.bind_to_storage_buffer(2);
 
-BUFFER_E = context.buffer(reserve=4*buffer_size)
+BUFFER_E = context.buffer(reserve=4*npart)
 BUFFER_E.bind_to_storage_buffer(3);
 
-BUFFER_M = context.buffer(reserve=4*buffer_size)
+BUFFER_M = context.buffer(reserve=4*npart)
 BUFFER_M.bind_to_storage_buffer(4);
 
 BUFFER_PARAMS = context.buffer(reserve=4*5)
@@ -249,39 +247,24 @@ for k in range(npas):
     np.save(fichx, pos[:,0])
     np.save(fichy, pos[:,1])
 
-    EP = 0
+    BUFFER_P.write(pos.astype('f4').tobytes())
 
-    F.fill(0)
-    BUFFER_M.clear()
-    for i,j in combinations_set:
+    compute_shader.run(group_x=nombre_buffer)
 
-        params = np.array([i,j,nombre_elements[i],nombre_elements[j],0])
-        BUFFER_PARAMS.write(params.astype("uint32").tobytes())
+    Fgl = np.frombuffer(BUFFER_F.read(), dtype=np.float32)
 
-        inf_i = i * buffer_size
-        sup_i = inf_i + nombre_elements[i]
+    EPgl = np.frombuffer(BUFFER_E.read(), dtype=np.float32)
 
-        inf_j =  j * buffer_size
-        sup_j =  inf_j + nombre_elements[j]
+    F[:,0] = Fgl[::2]
+    F[:,1] = Fgl[1::2]
 
-        BUFFER_P.write(pos[inf_i:sup_i].astype('f4').tobytes())
-        BUFFER_P2.write(pos[inf_j:sup_j].astype('f4').tobytes())
+    mask = np.frombuffer(BUFFER_M.read(), dtype=np.float32)
 
-        compute_shader.run()
+# caclul energie potentielle
+    EP = 0.5*ne.evaluate("sum(EPgl)")
 
-        Fgl = np.frombuffer(BUFFER_F.read(), dtype=np.float32)
-
-        EPgl = np.frombuffer(BUFFER_E.read(), dtype=np.float32)
-
-        F[inf_i:sup_i,0] += Fgl[::2]
-        F[inf_i:sup_i,1] += Fgl[1::2]
-
-        mask[inf_i:sup_i] = np.frombuffer(BUFFER_M.read(), dtype=np.float32)
-
-    # caclul energie potentielle
-        EP += ne.evaluate("sum(EPgl)")
     mask_sum = ne.evaluate("sum(mask)")
-    EP *= 0.5
+
     print("Energie potentielle : %s J"%(EP)) # affichage
 
     # calcul energie cinetique
