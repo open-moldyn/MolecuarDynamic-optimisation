@@ -3,12 +3,10 @@ import numpy as np
 import numexpr as ne # ne.evaluate("") si j ai compris favorise le multicoeur -> oui et pas que
 import time # calcul du... temps de calcul
 import moderngl
-from itertools import product
 from PIL import Image
-import io
 from imageio_ffmpeg import *
 import gl_util
-
+import instanced_rendering
 
 # Ce programme utilise:
 # le potentiel de Lennard-Jones
@@ -16,12 +14,32 @@ import gl_util
 # la methode de velicity rescaling pour asservir la temperature
 
 # --- paramètres ---------------------------------------------------------------------------
-# parametres du potentiel de Lennard-Jones (unite SI, pour l'argon)
-sigma = 3.4e-10 #metre
-epsilon = 1.65e-21 # joules
-m = 6.69e-26 # kilogrammes
+# parametres du potentiel de Lennard-Jones (unite SI)
+# argon
+sigma_a = 3.4e-10 #metre
+epsilon_a = 1.65e-21 # joules
+m_a = 6.69e-26 # kilogrammes
 # position du minimum de potentiel
-re = 2.0**(1.0/6.0)*sigma
+re_a = 2.0**(1.0/6.0)*sigma_a
+
+x_a = 0.5
+
+# neon
+sigma_b = 2.7e-10 #metre
+epsilon_b = 3.1e-21 # joules
+m_b = 3.38e-26 # kilogrammes
+# position du minimum de potentiel
+re_b = 2.0**(1.0/6.0)*sigma_b
+
+
+re = re_a
+
+
+# règles de Kong
+sigma_ab = (  (epsilon_a * sigma_a**12 * (1 + ((epsilon_b*sigma_b**12)/(epsilon_a*sigma_a**12))**(1/13))**13)  /
+              (2**13 * np.sqrt(epsilon_b*sigma_b**6*epsilon_a*sigma_a**6)) )**(1/6)
+epsilon_ab = np.sqrt(epsilon_b*sigma_b**6*epsilon_a*sigma_a**6)/sigma_ab**6
+
 
 # rayon de coupure (limite standard = 2*re)
 rcut = 2.0*re
@@ -32,20 +50,24 @@ nbrex = 100
 nbrey = 100
 
 # nombre de pas
-npas = 5000
+npas = 100
+
 
 # pour le film, afficher une image simule sur:
-pfilm = 5
+pfilm = 10
 # enregistrer les images du film?
-film = True
+film = False
+
+# afficher en direct ?
+rendu_direct  = False
 
 # temperature voulue, on peut programmer ce qu'on veut: ici un cosinus
 Tini = 2 # temperature initiale visee kelvin
-DeltaT = 150 # Kelvin amplitude
-perioT = 0.5*npas # periode en pas de temps
+DeltaT = 100 # Kelvin amplitude
+perioT = 2.0*npas # periode en pas de temps
 gamma = 0.5 # parametre pour asservir la temperature ("potard")
-betaC = True # True si la temperature est controlee, False sinon
-markersize = 0.5
+betaC = False # True si la temperature est controlee, False sinon
+
 # --- \paramètres ---------------------------------------------------------------------------
 
 
@@ -57,23 +79,22 @@ print=lambda *a:0
 # nombre d'atomes au total
 npart = nbrex*nbrey
 
+n_a = int(x_a*npart)
+
+m = np.concatenate((m_a*np.ones(n_a), m_b*np.ones(npart-n_a)))
+
+
 max_buffer_size = gl_util.testMaxSizes()
 nombre_buffer = int(np.ceil(npart/max_buffer_size))
 buffer_size = int(np.ceil(npart/nombre_buffer))
 # on découpe pour le shader qui ne sait pas faire trop de choses à la fois
-
-combinations_set = set(product(range(nombre_buffer),repeat=2))
-
-nombre_elements = np.array([buffer_size]*nombre_buffer)
-if npart%buffer_size:
-    nombre_elements[-1] = npart%buffer_size
 
 
 print("distance interatomique: %s Angstrom"%(re*1e10))
 #
 #
 # periode d'oscillation pour pouvoir calibrer le pas de temps
-puls0 = np.sqrt((57.1464*epsilon/(sigma**2.0))/m)
+puls0 = np.sqrt((57.1464*epsilon_a/(sigma_a**2.0))/m_a)
 freq0 = puls0/(2.0*3.14159)
 peri0 = 1/freq0
 print("periode oscillation atomique: %s s"%(peri0))
@@ -99,7 +120,7 @@ Volume = LengthX*LengthY*re # volume avec une epaisseur re
 #
 #
 # calcul de la masse simulee
-masseSim = m * npart
+masseSim = m_a*n_a + m_b*(npart-n_a)
 print("masse simulee: %s kg"%(masseSim))
 # masse volumique
 densi = masseSim/Volume
@@ -121,7 +142,8 @@ posy = np.concatenate([i*np.ones(nbrex) for i in range(nbrey)])*re
 posy0 = posy # pour le calcul MSD
 
 pos = np.transpose([posx, posy])
-pos0 = np.transpose([posx0, posy0])
+np.random.shuffle(pos)
+pos0 = pos.copy()
 
 #
 # longueur x et y pour la periodicite
@@ -134,10 +156,10 @@ shiftY = LengthY-rcut # meme principe verticalement
 vx =np.random.normal(0.0, 0.001, npart)
 vy =np.random.normal(0.0, 0.001, npart)
 v = np.transpose([vx, vy])
-meanV2 = np.mean(ne.evaluate("vx*vx+vy*vy"))
+meanmV2 = np.mean(ne.evaluate("m*(vx*vx+vy*vy)"))
 # constante de Boltzmann pour les calculs de temperatures
 kB=1.38064852e-23 #unite SI
-vfact = np.sqrt(2*kB*Tini/(m*meanV2)) # pourconvertir la vitesse (l'energie cinetique) en temperature voulue
+vfact = np.sqrt(2*kB*Tini/(meanmV2)) # pourconvertir la vitesse (l'energie cinetique) en temperature voulue
 vx = vx*vfact
 vy = vy*vfact
 v *= vfact
@@ -151,7 +173,7 @@ print("temperature initiale: %s K"%(Tvoulue))
 plt.figure(1)
 plt.quiver([np.mean(posx)],[np.mean(posy)],[np.mean(vx*dt)],[np.mean(vy*dt)],color='g',angles='xy', scale_units='xy', scale=1) # le deplacement global de toutes les particules
 plt.quiver(posx,posy,vx*dt*200,vy*dt*200,(vx*vx+vy*vy),angles='xy', scale_units='xy', scale=1) # le deplacement de chaque particule
-plt.plot(posx, posy,'ro',markersize=markersize)
+plt.plot(posx, posy,'ro',markersize=2)
 plt.ylim(YlimB,YlimH)
 plt.xlim(XlimG,XlimD)
 plt.show(block=True) # true empeche l'excecution de la suite du programme avant fermeture de la fenetre
@@ -164,15 +186,16 @@ F = np.zeros(np.shape(pos))
 #
 # enregistrement des positions dans des fichiers,
 # c pas propre mais ca fonctionne: a modifier
-
-
-fichx = open('storex.npy', 'w+b')
-np.save(fichx, posx)
-fichy = open('storey.npy', 'w+b')
-np.save(fichy, posy)
+#fichx = open('storex.npy', 'w+b')
+#np.save(fichx, posx)
+#fichy = open('storey.npy', 'w+b')
+#np.save(fichy, posy)
 #
 # initialisation listes fonctions du pas
 #
+
+m = np.transpose([m,m])
+
 omegaT=2*np.pi/perioT
 knparts=kB*npart
 inv2nparts=1/(2.0*npart)
@@ -183,22 +206,33 @@ limSup = np.array([XlimD, YlimH])
 length = np.array([LengthX, LengthY])
 
 
-
 # Initialisation du contexte pour le GLSL
 consts = {
     "X": buffer_size,
-    "Y": 1,
-    "Z": 1,
+    "N_A": n_a,
     "NPART":npart,
     "RCUT":rcut,
-    "EPSILON":epsilon,
-    "SIGMA":sigma,
+
+    "EPSILONA":epsilon_a,
+    "EPSILONB":epsilon_b,
+    "EPSILONAB":epsilon_ab,
+
+    "SIGMAA":sigma_a,
+    "SIGMAB":sigma_b,
+    "SIGMAAB":sigma_ab,
+
     "SHIFTX":shiftX,
     "SHIFTY":shiftY,
     "LENGTHX":LengthX,
     "LENGTHY":LengthY,
 }
-context = moderngl.create_standalone_context(require=430)
+
+
+if rendu_direct:
+    window = instanced_rendering.prepareRender()
+    context = window.example.ctx
+else:
+    context = moderngl.create_standalone_context(require=430)
 compute_shader = context.compute_shader(gl_util.source('./moldyn.glsl', consts))
 
 BUFFER_P = context.buffer(reserve=8*npart)
@@ -216,6 +250,14 @@ BUFFER_M.bind_to_storage_buffer(4);
 BUFFER_PARAMS = context.buffer(reserve=4*5)
 BUFFER_PARAMS.bind_to_storage_buffer(5)
 
+if rendu_direct:
+    window.example.vao = window.example.ctx.simple_vertex_array(window.example.prog, BUFFER_P, 'in_vert')
+    window.example.npart = npart
+    window.example.lengthx = LengthX
+    window.example.lengthy = LengthY
+    window.example.vao = window.example.ctx.simple_vertex_array(window.example.prog, BUFFER_P, 'in_vert')
+    window.example.scale.value = (2/window.example.lengthx, 2/window.example.lengthy)
+    window.example.n_a.value = n_a
 
 pask = np.array(range(npas)) # le pas lui-meme
 pasCPU = np.zeros(npas) # le temps de calcul par pas
@@ -231,10 +273,21 @@ tempstot = 0 #initialisation du chrono
 
 mask = np.zeros(npart)
 
+start_time = time.time()
+current_time = start_time
+
+if film:
+    width, height = window.size
+    figure_size = (width,height)
+    gen = write_frames("debug.mp4", figure_size,fps=24,quality=9)
+    gen.send(None)
+    box=(0,0,figure_size[0],figure_size[1])
+
+
 for k in range(npas):
     debutk = time.perf_counter() # calcul le temps de calcul
     print('%%%%%%%%%%%%%%')
-    ppprint("pas numero: %s"%(k))
+    print(k)
     # methode de velocity-verlet
     # vitesse au demi pas de temps
     v2 = ne.evaluate("v + F*dt2m")
@@ -248,12 +301,18 @@ for k in range(npas):
     pos = ne.evaluate("pos + (pos<limInf)*length - (pos>limSup)*length")
     
     # stockage des positions dans les fichiers deja cree
-    np.save(fichx, pos[:,0])
-    np.save(fichy, pos[:,1])
+    #np.save(fichx, pos[:,0])
+    #np.save(fichy, pos[:,1])
 
     BUFFER_P.write(pos.astype('f4').tobytes())
 
     compute_shader.run(group_x=nombre_buffer)
+
+
+    # calcul energie cinetique
+    EC = 0.5*ne.evaluate("sum(m*v*v)")
+    print("Energie cinetique : %s J"%(EC)) # affichage
+
 
     Fgl = np.frombuffer(BUFFER_F.read(), dtype=np.float32)
 
@@ -271,10 +330,6 @@ for k in range(npas):
 
     print("Energie potentielle : %s J"%(EP)) # affichage
 
-    # calcul energie cinetique
-    EC = 0.5*m*ne.evaluate("sum(v*v)")
-    print("Energie cinetique : %s J"%(EC)) # affichage
-
     # calcul energie totale
     ET = EC+EP
     
@@ -290,12 +345,15 @@ for k in range(npas):
     # calcul et asservissement temperature
     T = EC/knparts
     print("temperature: %s K"%(T))
-    beta = betaC*np.sqrt(1+gamma*(pasTC[k]/T-1)) - 1
     # stockage de la temperature
     pasT[k] += T
     
     # calcul du nouveau vx ou vy (methode de Verlet-vitesse) pour le pas suivant
-    v = ne.evaluate("(v2 + (F*dt2m))*(beta + 1)")
+    if betaC:
+        beta = np.sqrt(1+gamma*(pasTC[k]/T-1))
+        v = ne.evaluate("(v2 + (F*dt2m))*beta")
+    else:
+        v = ne.evaluate("v2 + (F*dt2m)")
     
     # fin des calculs utiles a Verlet
     fink = time.perf_counter()# marqueur fin temps de calcul
@@ -303,19 +361,36 @@ for k in range(npas):
     pasCPU[k] = (fink-debutk)*1000 # stockage du temps de calcul
     tempstot += fink-debutk # temps de calcul total
     print("temps total: %s s"%(tempstot))
+
+    if k % pfilm == 0:
+        ppprint(k)
+
+        if rendu_direct:
+
+            current_time, prev_time = time.time(), current_time
+            frame_time = max(current_time - prev_time, 1 / 1000)
+            window.render(current_time - start_time, frame_time)
+            window.swap_buffers()
+
+            if film:
+                gen.send(Image.frombytes('RGB', context.fbo.size, context.fbo.read()).crop(box).transpose(Image.FLIP_TOP_BOTTOM).tobytes())
+
     
 # fin de la grosse boucle
 ###############################################
 
-
+if film:
+    gen.close()
 
 
 
 # fermeture des fichiers de positions
-fichx.close()
-fichy.close()
+#fichx.close()
+#fichy.close()
 
 
+if rendu_direct:
+    window.destroy()
 
 ###############################################
 ### tous les dessins
@@ -323,11 +398,13 @@ fichy.close()
 plt.figure(2)
 plt.xlim(XlimG,XlimD)
 plt.ylim(YlimB,YlimH)
-plt.plot(pos[:,0],pos[:,1],'ro', markersize=markersize)
+plt.plot(pos[:n_a,0],pos[:n_a,1],'ro', markersize=2)
+plt.plot(pos[n_a:,0],pos[n_a:,1],'bo', markersize=2)
 plt.show()
 
 # dessin du temps CPU
 plt.figure(3)
+#plt.ylim(0,1.05*max(pasCPU))
 plt.plot(pask,pasCPU)
 plt.xlabel('pas')
 plt.ylabel('temps de calcul (ms)')
@@ -379,6 +456,7 @@ plt.show()
 
 #
 # film de la simu: image tout les X pas de temps
+""""
 if film :
 # ouverture pour la lecture
     imgs = []
@@ -388,23 +466,22 @@ if film :
     klist = range(0,npas,pfilm)
     # boucle pour creer le film
     figure_size = (1920, 1088)
-    gen = write_frames("debug.mp4", figure_size,fps=24,quality=10)
+    gen = write_frames("debug.mp4", figure_size,fps=24,quality=9)
     gen.send(None)
     for k in range(npas):
         posx = np.load(fix) # on charge a chaque pas de temps
         posy = np.load(fiy) # on charge a chaque pas de temps
         # dessin a chaque pas (ne s'ouvre pas: est sauvegarde de maniere incrementale)
         if k in klist:
-            plt.figure(0, figsize=(figure_size[0] / (72*3), figure_size[1] / (72*3)))
+            plt.figure(0, figsize=(figure_size[0] / (72*2), figure_size[1] / (72*2)))
             # definition du domaine de dessin
             plt.ioff() # pour ne pas afficher les graphs)
             plt.ylim(YlimB,YlimH)
             plt.xlim(XlimG,XlimD)
             plt.xlabel(k)
-            plt.plot(posx,posy,'ro', markersize=markersize)
-            plt.title(str(pasT[k]))
+            plt.plot(posx,posy,'ro', markersize=0.5)
             temp = io.BytesIO()
-            plt.savefig(temp, format='raw',dpi=72*3) # sauvegarde incrementale
+            plt.savefig(temp, format='raw',dpi=72*2) # sauvegarde incrementale
             plt.clf()
             temp.seek(0)
             #imgs.append(Image.frombytes('RGBA', figure_size, temp.read()).convert('RGB'))
@@ -417,3 +494,4 @@ if film :
     fix.close()
     fiy.close()
 print ('%%%%%%%%%%%%%%%%%%%%%%')
+"""

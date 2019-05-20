@@ -105,3 +105,9 @@ venv.bak/
 
 #numpy stuff
 *.npy
+
+# generated videos
+*.mp4
+
+# pycharm stuff
+.idea/
