@@ -7,6 +7,7 @@ from PIL import Image
 from imageio_ffmpeg import *
 import gl_util
 import instanced_rendering
+import PDF
 
 # Ce programme utilise:
 # le potentiel de Lennard-Jones
@@ -452,6 +453,10 @@ line_ET, = plt.plot(pask,pasET)
 plt.xlabel('pas')
 plt.ylabel('Energies (J)')
 plt.legend([line_EP,line_ET], ['EP','ET'])
+plt.show()
+
+plt.figure(9)
+plt.plot(*PDF.PDF(pos,2000,np.linspace(0,1.5*rcut,50)))
 plt.show()
 
 #
