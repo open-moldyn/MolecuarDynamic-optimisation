@@ -4,16 +4,23 @@
 
 
 #define X %%X%%
-#define Y %%Y%%
-#define Z %%Z%%
 #define NPART %%NPART%%
+#define N_A %%N_A%%
 #define RCUT %%RCUT%%
-#define EPSILON %%EPSILON%%
-#define SIGMA %%SIGMA%%
+
+#define EPSILONA %%EPSILONA%%
+#define EPSILONB %%EPSILONB%%
+#define EPSILONAB %%EPSILONAB%%
+
+#define SIGMAA %%SIGMAA%%
+#define SIGMAB %%SIGMAB%%
+#define SIGMAAB %%SIGMAAB%%
+
 #define SHIFTX %%SHIFTX%%
 #define SHIFTY %%SHIFTY%%
 #define LENGTHX %%LENGTHX%%
 #define LENGTHY %%LENGTHY%%
+
 
 #define RCUT2 RCUT*RCUT
 
@@ -45,57 +52,73 @@ layout (std430, binding=5) buffer in_params
     uint inparams[];
 };
 
-float force(float dist) {
-	const float p=pow(SIGMA/dist,6);
-	return (-4.0*EPSILON*(6.0*p-12.0*p*p))/(dist*dist);
+float force(float dist,float p, float epsilon) {
+	return (-4.0*epsilon*(6.0*p-12.0*p*p))/(dist*dist);
 }
 
-float energy(float dist) {
-	const float p=pow(SIGMA/dist,6);
-	return EPSILON*(4.0*(p*p-p)+127.0/4096.0);
+float energy(float dist,float p, float epsilon) {
+	return epsilon*(4.0*(p*p-p)+127.0/4096.0);
+}
+
+void iterate(vec2 pos, uint a, uint b, float epsilon, float sigma) {
+	const uint x = gl_GlobalInvocationID.x;
+
+	for (uint i=a;i<b;i++) {
+		if (i!=x) {
+			vec2 distxy = pos - inxs[i];
+
+			if (distxy.x<(-SHIFTX)) {
+				distxy.x+=LENGTHX;
+			}
+			if (distxy.x>SHIFTX) {
+				distxy.x-=LENGTHX;
+			}
+
+			if (distxy.y<(-SHIFTY)) {
+				distxy.y+=LENGTHY;
+			}
+			if (distxy.y>SHIFTY) {
+				distxy.y-=LENGTHY;
+			}
+
+
+			/* Ce test accélère d'environ 15%, puisqu'on saute les étapes de multipication+somme du calcul de distance
+			 * pour voir si on est dans la sphère
+			 */
+			if(abs(distxy.x)<RCUT && abs(distxy.y)<RCUT) {
+
+				float dist = length(distxy);
+
+				if (dist<RCUT) {
+					const float p=pow(sigma/dist, 6);
+
+					outfs[x] += force(dist, p, epsilon)*distxy;
+					outes[x] += energy(dist, p, epsilon);
+					outms[x] += 1.0;
+				}
+			}
+		}
+	}
 }
 
 void main()
 {
-	const int x = int(gl_GlobalInvocationID.x);
+	const uint x = gl_GlobalInvocationID.x;
 	const vec2 pos = inxs[x];
+
+	outfs[x] = vec2(0.0);
+	outes[x] = 0.0;
+	outms[x] = 0.0;
 
 	if(x < NPART) {
 
-		vec2 f = vec2(0.0, 0.0);
-		float e = 0.0;
-		float m = 0.0;
-
-		for (int i=0;i<NPART;i++) {
-			if (i!=x) {
-				vec2 distxy = pos - inxs[i];
-
-				if (distxy.x<(-SHIFTX)) {
-					distxy.x+=LENGTHX;
-				}
-				if (distxy.x>SHIFTX) {
-					distxy.x-=LENGTHX;
-				}
-
-				if (distxy.y<(-SHIFTY)) {
-					distxy.y+=LENGTHY;
-				}
-				if (distxy.y>SHIFTY) {
-					distxy.y-=LENGTHY;
-				}
-
-				float dist2 = dot(distxy,distxy);
-				if (dist2<RCUT2) {
-					float dist = sqrt(dist2);
-					f+=force(dist)*distxy;
-					e+=energy(dist);
-					m+=1.0;
-				}
-			}
+		if(x < N_A) {
+			iterate(pos,0,N_A,EPSILONA,SIGMAA);
+			iterate(pos,N_A,NPART,EPSILONAB,SIGMAAB);
+		} else {
+			iterate(pos,0,N_A,EPSILONAB,SIGMAAB);
+			iterate(pos,N_A,NPART,EPSILONB,SIGMAB);
 		}
 
-		outfs[x] = f;
-		outes[x] = e;
-		outms[x] = m;
 	}
 }
