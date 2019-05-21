@@ -4,7 +4,6 @@ import numexpr as ne
 def PDF(pos, nb_samples, rcut, bin_count):
     bins = np.linspace(0, rcut, bin_count)
     samples = np.random.choice(range(len(pos)), nb_samples)
-    dists = []
     hist = np.zeros(len(bins)-1)
     for s in samples:
         sample = pos[s,:]
