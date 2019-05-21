@@ -13,17 +13,8 @@ class InstancedRendering(Example):
         super().__init__(**kwargs)
 
         self.prog = self.ctx.program(
-            vertex_shader=gl_util.source("vertex.glsl",{}),
-            fragment_shader='''
-                #version 430
-
-                in vec4 v_color;
-                out vec4 f_color;
-
-                void main() {
-                    f_color = v_color;
-                }
-            ''',
+            vertex_shader=gl_util.source("vertex.glsl"),
+            fragment_shader=gl_util.source("fragment.glsl"),
         )
 
         self.ctx.point_size = 3.0
