@@ -23,7 +23,7 @@ m_a = 6.69e-26 # kilogrammes
 # position du minimum de potentiel
 re_a = 2.0**(1.0/6.0)*sigma_a
 
-x_a = 0.5
+x_a = 1.0
 
 # neon
 sigma_b = 2.7e-10 #metre
@@ -65,9 +65,9 @@ rendu_direct  = False
 # temperature voulue, on peut programmer ce qu'on veut: ici un cosinus
 Tini = 2 # temperature initiale visee kelvin
 DeltaT = 100 # Kelvin amplitude
-perioT = 2.0*npas # periode en pas de temps
+perioT = 1.0*npas # periode en pas de temps
 gamma = 0.5 # parametre pour asservir la temperature ("potard")
-betaC = False # True si la temperature est controlee, False sinon
+betaC = True # True si la temperature est controlee, False sinon
 
 # --- \paramètres ---------------------------------------------------------------------------
 
@@ -456,7 +456,7 @@ plt.legend([line_EP,line_ET], ['EP','ET'])
 plt.show()
 
 plt.figure(9)
-plt.plot(*PDF.PDF(pos,2000,np.linspace(0,1.5*rcut,50)))
+plt.plot(*PDF.PDF(pos,2000,1.5*rcut,50))
 plt.show()
 
 #

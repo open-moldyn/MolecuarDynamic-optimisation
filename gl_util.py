@@ -1,6 +1,6 @@
 import moderngl
 
-def source(uri, consts):
+def source(uri, consts={}):
     ''' read gl code '''
     with open(uri, 'r') as fp:
         content = fp.read()
