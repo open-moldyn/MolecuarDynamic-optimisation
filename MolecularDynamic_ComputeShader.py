@@ -46,9 +46,9 @@ epsilon_ab = np.sqrt(epsilon_b*sigma_b**6*epsilon_a*sigma_a**6)/sigma_ab**6
 rcut = 2.0*re
 
 # nombre d'atomes sur x
-nbrex = 100
+nbrex = 200
 # nombre d'atomes sur y
-nbrey = 100
+nbrey = 200
 
 # nombre de pas
 npas = 100
@@ -85,7 +85,8 @@ n_a = int(x_a*npart)
 m = np.concatenate((m_a*np.ones(n_a), m_b*np.ones(npart-n_a)))
 
 
-max_buffer_size = gl_util.testMaxSizes()
+#max_buffer_size = gl_util.testMaxSizes()
+max_buffer_size = 256 # à faire d'après les conseils d'Intel, après essais on gagne effectivement du temps
 nombre_buffer = int(np.ceil(npart/max_buffer_size))
 buffer_size = int(np.ceil(npart/nombre_buffer))
 # on découpe pour le shader qui ne sait pas faire trop de choses à la fois

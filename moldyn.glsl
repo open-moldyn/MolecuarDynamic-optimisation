@@ -67,6 +67,9 @@ void iterate(vec2 pos, uint a, uint b, float epsilon, float sigma) {
 		if (i!=x) {
 			vec2 distxy = pos - inxs[i];
 
+            /* On trouvera des tutos sur le net qui disent de vectoriser les tests suivants à la main
+             * mais le compilateur est malin et le fait tout seul.
+             */
 			if (distxy.x<(-SHIFTX)) {
 				distxy.x+=LENGTHX;
 			}
@@ -83,7 +86,7 @@ void iterate(vec2 pos, uint a, uint b, float epsilon, float sigma) {
 
 
 			/* Ce test accélère d'environ 15%, puisqu'on saute les étapes de multipication+somme du calcul de distance
-			 * pour voir si on est dans la sphère
+			 * pour voir si on est dans la sphère. De même, le compilateur vectorise tout seul.
 			 */
 			if(abs(distxy.x)<RCUT && abs(distxy.y)<RCUT) {
 
