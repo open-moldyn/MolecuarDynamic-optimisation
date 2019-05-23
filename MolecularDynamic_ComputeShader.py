@@ -238,16 +238,16 @@ else:
 compute_shader = context.compute_shader(gl_util.source('./moldyn.glsl', consts))
 
 BUFFER_P = context.buffer(reserve=8*npart)
-BUFFER_P.bind_to_storage_buffer(0);
+BUFFER_P.bind_to_storage_buffer(0)
 
 BUFFER_F = context.buffer(reserve=8*npart)
-BUFFER_F.bind_to_storage_buffer(2);
+BUFFER_F.bind_to_storage_buffer(2)
 
 BUFFER_E = context.buffer(reserve=4*npart)
-BUFFER_E.bind_to_storage_buffer(3);
+BUFFER_E.bind_to_storage_buffer(3)
 
 BUFFER_M = context.buffer(reserve=4*npart)
-BUFFER_M.bind_to_storage_buffer(4);
+BUFFER_M.bind_to_storage_buffer(4)
 
 BUFFER_PARAMS = context.buffer(reserve=4*5)
 BUFFER_PARAMS.bind_to_storage_buffer(5)
@@ -286,22 +286,27 @@ if film:
     box=(0,0,figure_size[0],figure_size[1])
 
 
+v2 = np.zeros(v.shape)
+
 for k in range(npas):
     debutk = time.perf_counter() # calcul le temps de calcul
     print('%%%%%%%%%%%%%%')
     print(k)
     # methode de velocity-verlet
     # vitesse au demi pas de temps
-    v2 = ne.evaluate("v + F*dt2m")
+    #v2 = ne.evaluate("v + F*dt2m")
+    ne.evaluate("v + F*dt2m", out=v2)
     # nouvelles positions deduites
-    pos = ne.evaluate("pos + v2*dt")
-    
+    #pos = ne.evaluate("pos + v2*dt")
+    ne.evaluate("pos + v2*dt", out=pos)
+
     # Mean Square Displacement
     pasMSD[k] = ne.evaluate("sum((pos-pos0)**2)")*inv2npartsre
     
     # correction de systeme periodic: on replace les atomes trop a droite a gauche, etc...
-    pos = ne.evaluate("pos + (pos<limInf)*length - (pos>limSup)*length")
-    
+    #pos = ne.evaluate("pos + (pos<limInf)*length - (pos>limSup)*length")
+    ne.evaluate("pos + (pos<limInf)*length - (pos>limSup)*length", out=pos)
+
     # stockage des positions dans les fichiers deja cree
     #np.save(fichx, pos[:,0])
     #np.save(fichy, pos[:,1])
@@ -353,10 +358,12 @@ for k in range(npas):
     # calcul du nouveau vx ou vy (methode de Verlet-vitesse) pour le pas suivant
     if betaC:
         beta = np.sqrt(1+gamma*(pasTC[k]/T-1))
-        v = ne.evaluate("(v2 + (F*dt2m))*beta")
+        #v = ne.evaluate("(v2 + (F*dt2m))*beta")
+        ne.evaluate("(v2 + (F*dt2m))*beta", out=v)
     else:
-        v = ne.evaluate("v2 + (F*dt2m)")
-    
+        #v = ne.evaluate("v2 + (F*dt2m)")
+        ne.evaluate("v2 + (F*dt2m)", out=v)
+
     # fin des calculs utiles a Verlet
     fink = time.perf_counter()# marqueur fin temps de calcul
     print("Temps par pas : %s s"%(fink-debutk))
@@ -457,7 +464,7 @@ plt.legend([line_EP,line_ET], ['EP','ET'])
 plt.show()
 
 plt.figure(9)
-plt.plot(*PDF.PDF(pos,2000,1.5*rcut,50))
+plt.plot(*PDF.PDF(pos,2000,1.0*rcut,50))
 plt.show()
 
 #
