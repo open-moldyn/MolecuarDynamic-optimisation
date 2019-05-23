@@ -8,6 +8,7 @@ from imageio_ffmpeg import *
 import gl_util
 import instanced_rendering
 import PDF
+import scipy.signal as sc
 
 # Ce programme utilise:
 # le potentiel de Lennard-Jones
@@ -23,7 +24,7 @@ m_a = 6.69e-26 # kilogrammes
 # position du minimum de potentiel
 re_a = 2.0**(1.0/6.0)*sigma_a
 
-x_a = 1.0
+x_a = 0.99
 
 # neon
 sigma_b = 2.7e-10 #metre
@@ -46,12 +47,12 @@ epsilon_ab = np.sqrt(epsilon_b*sigma_b**6*epsilon_a*sigma_a**6)/sigma_ab**6
 rcut = 2.0*re
 
 # nombre d'atomes sur x
-nbrex = 200
+nbrex = 100
 # nombre d'atomes sur y
-nbrey = 200
+nbrey = 100
 
 # nombre de pas
-npas = 100
+npas = 200
 
 
 # pour le film, afficher une image simule sur:
@@ -64,7 +65,7 @@ rendu_direct  = False
 
 # temperature voulue, on peut programmer ce qu'on veut: ici un cosinus
 Tini = 2 # temperature initiale visee kelvin
-DeltaT = 100 # Kelvin amplitude
+DeltaT = 200 # Kelvin amplitude
 perioT = 1.0*npas # periode en pas de temps
 gamma = 0.5 # parametre pour asservir la temperature ("potard")
 betaC = True # True si la temperature est controlee, False sinon
@@ -418,7 +419,7 @@ plt.plot(pask,pasCPU)
 plt.xlabel('pas')
 plt.ylabel('temps de calcul (ms)')
 plt.show()
-
+"""
 # dessin de temperature
 plt.figure(4)
 line_T, = plt.plot(pastemps,pasT)
@@ -462,11 +463,40 @@ plt.xlabel('pas')
 plt.ylabel('Energies (J)')
 plt.legend([line_EP,line_ET], ['EP','ET'])
 plt.show()
+"""
+
+bins = nbrex*2
+H,xedges,yedges = np.histogram2d(pos[:,0], pos[:,1], bins=bins)
+"""masque = np.array([
+    [1,1,1],
+    [1,1,1],
+    [1,1,1],
+])"""
+def masque_cercle(N):
+    masque = np.ones((N,N))
+    centre = (N-1)//2
+    for i in range(N):
+        for j in range(N):
+            if i!=centre or j!=centre:
+                masque[i,j] /= np.sqrt((i-centre)**2+(j-centre)**2)
+    return masque
+masque = masque_cercle(11)
+joli_truc = sc.convolve2d(H,masque,mode='same',boundary='wrap')
 
 plt.figure(9)
-plt.plot(*PDF.PDF(pos,2000,1.0*rcut,50))
+pc = plt.pcolormesh(xedges, yedges, joli_truc.T)
+plt.contourf(xedges[:-1], yedges[:-1], joli_truc.T)
+plt.xlim(xedges[0], xedges[-1])
+plt.ylim(yedges[0], yedges[-1])
+plt.plot(pos[:n_a,0],pos[:n_a,1],'ro', markersize=1)
+plt.plot(pos[n_a:,0],pos[n_a:,1],'bo', markersize=1)
 plt.show()
 
+"""
+plt.figure(10)
+plt.plot(*PDF.PDF(pos,2000,1.0*rcut,50))
+plt.show()
+"""
 #
 # film de la simu: image tout les X pas de temps
 """"
