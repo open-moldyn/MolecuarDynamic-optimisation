@@ -1,3 +1,5 @@
+import  matplotlib
+matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt # pour les graph
 import numpy as np
 import numexpr as ne # ne.evaluate("") si j ai compris favorise le multicoeur -> oui et pas que
@@ -9,6 +11,7 @@ import gl_util
 import instanced_rendering
 import PDF
 import scipy.signal as sc
+
 
 # Ce programme utilise:
 # le potentiel de Lennard-Jones
@@ -24,7 +27,7 @@ m_a = 6.69e-26 # kilogrammes
 # position du minimum de potentiel
 re_a = 2.0**(1.0/6.0)*sigma_a
 
-x_a = 0.99
+x_a = 1.0
 
 # neon
 sigma_b = 2.7e-10 #metre
@@ -52,7 +55,7 @@ nbrex = 100
 nbrey = 100
 
 # nombre de pas
-npas = 200
+npas = 1500
 
 
 # pour le film, afficher une image simule sur:
@@ -65,7 +68,7 @@ rendu_direct  = False
 
 # temperature voulue, on peut programmer ce qu'on veut: ici un cosinus
 Tini = 2 # temperature initiale visee kelvin
-DeltaT = 200 # Kelvin amplitude
+DeltaT = 100 # Kelvin amplitude
 perioT = 1.0*npas # periode en pas de temps
 gamma = 0.5 # parametre pour asservir la temperature ("potard")
 betaC = True # True si la temperature est controlee, False sinon
@@ -103,7 +106,7 @@ peri0 = 1/freq0
 print("periode oscillation atomique: %s s"%(peri0))
 print("periode oscillation atomique: %s ps"%(peri0*1e12))
 #
-# pas de temps: 
+# pas de temps:
 dt = peri0/75
 print("pas de temps: %s ps"%(dt*1e12))
 #
@@ -180,7 +183,7 @@ plt.plot(posx, posy,'ro',markersize=2)
 plt.ylim(YlimB,YlimH)
 plt.xlim(XlimG,XlimD)
 plt.show(block=True) # true empeche l'excecution de la suite du programme avant fermeture de la fenetre
-plt.close()
+#plt.close()
 #
 # les forces au premier pas sont nulles et de la dimension de posx (posy)
 Fx = ne.evaluate("0.0*posx")
@@ -303,7 +306,7 @@ for k in range(npas):
 
     # Mean Square Displacement
     pasMSD[k] = ne.evaluate("sum((pos-pos0)**2)")*inv2npartsre
-    
+
     # correction de systeme periodic: on replace les atomes trop a droite a gauche, etc...
     #pos = ne.evaluate("pos + (pos<limInf)*length - (pos>limSup)*length")
     ne.evaluate("pos + (pos<limInf)*length - (pos>limSup)*length", out=pos)
@@ -340,22 +343,22 @@ for k in range(npas):
 
     # calcul energie totale
     ET = EC+EP
-    
+
     # calcul liaison par atome
     pasLiai[k] = mask_sum * inv2nparts
-    
+
     # stockage des energies
     pasEC[k] = EC
     pasEP[k] = EP
     pasET[k] = ET
     print("Energie totale : %s J"%(EP)) # affichage
-    
+
     # calcul et asservissement temperature
     T = EC/knparts
     print("temperature: %s K"%(T))
     # stockage de la temperature
     pasT[k] += T
-    
+
     # calcul du nouveau vx ou vy (methode de Verlet-vitesse) pour le pas suivant
     if betaC:
         beta = np.sqrt(1+gamma*(pasTC[k]/T-1))
@@ -385,7 +388,7 @@ for k in range(npas):
             if film:
                 gen.send(Image.frombytes('RGB', context.fbo.size, context.fbo.read()).crop(box).transpose(Image.FLIP_TOP_BOTTOM).tobytes())
 
-    
+
 # fin de la grosse boucle
 ###############################################
 
@@ -419,7 +422,7 @@ plt.plot(pask,pasCPU)
 plt.xlabel('pas')
 plt.ylabel('temps de calcul (ms)')
 plt.show()
-"""
+
 # dessin de temperature
 plt.figure(4)
 line_T, = plt.plot(pastemps,pasT)
@@ -428,7 +431,7 @@ plt.xlabel('temps (ps)')
 plt.ylabel('Temperature (K)')
 plt.legend([line_T, line_TC], ['T', 'T consigne'])
 plt.show()
-
+"""
 # dessin de MSD (mean square displacement)
 plt.figure(5)
 plt.plot(pasT,pasMSD)
@@ -465,7 +468,14 @@ plt.legend([line_EP,line_ET], ['EP','ET'])
 plt.show()
 """
 
-bins = nbrex*2
+
+
+# === density plot experimentation =================================================
+from matplotlib.widgets import Slider
+fig, ax = plt.subplots()
+plt.subplots_adjust(bottom=0.10)
+
+bins = nbrex*4
 H,xedges,yedges = np.histogram2d(pos[:,0], pos[:,1], bins=bins)
 """masque = np.array([
     [1,1,1],
@@ -480,16 +490,37 @@ def masque_cercle(N):
             if i!=centre or j!=centre:
                 masque[i,j] /= np.sqrt((i-centre)**2+(j-centre)**2)
     return masque
-masque = masque_cercle(11)
+masque = masque_cercle(29)
 joli_truc = sc.convolve2d(H,masque,mode='same',boundary='wrap')
 
-plt.figure(9)
-pc = plt.pcolormesh(xedges, yedges, joli_truc.T)
-plt.contourf(xedges[:-1], yedges[:-1], joli_truc.T)
-plt.xlim(xedges[0], xedges[-1])
-plt.ylim(yedges[0], yedges[-1])
-plt.plot(pos[:n_a,0],pos[:n_a,1],'ro', markersize=1)
-plt.plot(pos[n_a:,0],pos[n_a:,1],'bo', markersize=1)
+
+#pc = plt.pcolormesh(xedges, yedges, joli_truc.T)
+levels = np.linspace(np.min(joli_truc), np.max(joli_truc), 3)
+ax.contourf((xedges[:-1]+xedges[1:])/2, (yedges[:-1]+yedges[1:])/2, joli_truc.T,
+            levels=np.linspace(np.min(joli_truc), np.max(joli_truc), 3))
+ax.plot(pos[:n_a,0],pos[:n_a,1],'ro', markersize=1)
+ax.plot(pos[n_a:,0],pos[n_a:,1],'bo', markersize=1)
+
+axcolor = 'lightgoldenrodyellow'
+axfreq = plt.axes([0.25, 0.1, 0.65, 0.03], facecolor=axcolor)
+ax.axis('equal')
+sfreq = Slider(axfreq, 'level', levels[0]*1.01, levels[-1]*0.99, valinit=levels[1])
+
+def update(val):
+    level = sfreq.val
+    prev_axis = ax.axis()
+    ax.clear()
+    #plt.pause(1e-6)
+    ax.contourf((xedges[:-1] + xedges[1:]) / 2, (yedges[:-1] + yedges[1:]) / 2, joli_truc.T,
+               levels=[levels[0], level, levels[-1]])
+    ax.plot(pos[:n_a, 0], pos[:n_a, 1], 'ro', markersize=1)
+    ax.plot(pos[n_a:, 0], pos[n_a:, 1], 'bo', markersize=1)
+    ax.axis(prev_axis)
+    plt.pause(1e-6)
+    fig.canvas.draw_idle()
+
+sfreq.on_changed(update)
+
 plt.show()
 
 """
