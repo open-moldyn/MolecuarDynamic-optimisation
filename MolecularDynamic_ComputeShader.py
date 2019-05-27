@@ -15,7 +15,7 @@ import scipy.signal as sc
 
 # Ce programme utilise:
 # le potentiel de Lennard-Jones
-# la methode de Velocity-Verlet pour cacluler les positions
+# la methode de Position-Verlet pour cacluler les positions
 # la methode de velicity rescaling pour asservir la temperature
 
 # --- paramètres ---------------------------------------------------------------------------
@@ -207,6 +207,7 @@ knparts=kB*npart
 inv2nparts=1/(2.0*npart)
 inv2npartsre=inv2nparts/re
 dt2m=dt/(2*m)
+dtm=dt/m
 limInf = np.array([XlimG, YlimB])
 limSup = np.array([XlimD, YlimH])
 length = np.array([LengthX, LengthY])
@@ -299,10 +300,13 @@ for k in range(npas):
     # methode de velocity-verlet
     # vitesse au demi pas de temps
     #v2 = ne.evaluate("v + F*dt2m")
-    ne.evaluate("v + F*dt2m", out=v2)
+    #ne.evaluate("v + F*dt2m", out=v2)
     # nouvelles positions deduites
     #pos = ne.evaluate("pos + v2*dt")
-    ne.evaluate("pos + v2*dt", out=pos)
+    ne.evaluate("pos + v*dt/2.0", out=pos)  # half drift
+
+
+
 
     # Mean Square Displacement
     pasMSD[k] = ne.evaluate("sum((pos-pos0)**2)")*inv2npartsre
@@ -363,10 +367,16 @@ for k in range(npas):
     if betaC:
         beta = np.sqrt(1+gamma*(pasTC[k]/T-1))
         #v = ne.evaluate("(v2 + (F*dt2m))*beta")
-        ne.evaluate("(v2 + (F*dt2m))*beta", out=v)
+        #ne.evaluate("(v2 + (F*dt2m))*beta", out=v)
+        ne.evaluate("(v + (F*dtm))*beta", out=v) # kick
+
+        ne.evaluate("pos + v*dt/2.0", out=pos) # half drift
     else:
         #v = ne.evaluate("v2 + (F*dt2m)")
-        ne.evaluate("v2 + (F*dt2m)", out=v)
+        #ne.evaluate("v2 + (F*dt2m)", out=v)
+        ne.evaluate("v + (F*dtm)", out=v) # kick
+
+        ne.evaluate("pos + v*dt/2.0", out=pos) # half drift
 
     # fin des calculs utiles a Verlet
     fink = time.perf_counter()# marqueur fin temps de calcul
